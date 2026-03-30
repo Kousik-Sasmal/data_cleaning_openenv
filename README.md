@@ -1,5 +1,5 @@
 ---
-title: Sql Agent Env Environment Server
+title: Data Cleaning Env Environment Server
 emoji: 🎵
 colorFrom: blue
 colorTo: blue
@@ -11,41 +11,45 @@ tags:
   - openenv
 ---
 
-# Sql Agent Env Environment
+# Data Cleaning Env Environment
 
-A simple test environment that echoes back messages. Perfect for testing the env APIs as well as demonstrating environment usage patterns.
+A data cleaning environment where agents learn to manipulate messy datasets using commands like drop_duplicates, fill_na, and format_date.
 
 ## Quick Start
 
-The simplest way to use the Sql Agent Env environment is through the `SqlAgentEnv` class:
+The simplest way to use the Data Cleaning Env environment is through the `DataCleaningEnv` class:
 
 ```python
-from sql_agent_env import SqlAgentAction, SqlAgentEnv
+from data_cleaning_env import DataCleaningAction, DataCleaningEnv
 
 try:
     # Create environment from Docker image
-    sql_agent_envenv = SqlAgentEnv.from_docker_image("sql_agent_env-env:latest")
+    data_cleaning_envenv = DataCleaningEnv.from_docker_image("data-cleaning-env:latest")
 
     # Reset
-    result = sql_agent_envenv.reset()
-    print(f"Reset: {result.observation.echoed_message}")
+    result = data_cleaning_envenv.reset()
+    print(f"Reset: {result.observation.message}")
 
-    # Send multiple messages
-    messages = ["Hello, World!", "Testing echo", "Final message"]
+    # Send multiple commands
+    commands = [
+        DataCleaningAction(command="drop_duplicates", params={}),
+        DataCleaningAction(command="fill_na", params={"column": "email", "value": "unknown"}),
+        DataCleaningAction(command="submit", params={})
+    ]
 
-    for msg in messages:
-        result = sql_agent_envenv.step(SqlAgentAction(message=msg))
-        print(f"Sent: '{msg}'")
-        print(f"  → Echoed: '{result.observation.echoed_message}'")
-        print(f"  → Length: {result.observation.message_length}")
+    for action in commands:
+        result = data_cleaning_envenv.step(action)
+        print(f"Sent: '{action.command}'")
+        print(f"  → Feedback: '{result.observation.message}'")
+        print(f"  → Score: {result.observation.current_score}")
         print(f"  → Reward: {result.reward}")
 
 finally:
     # Always clean up
-    sql_agent_envenv.close()
+    data_cleaning_envenv.close()
 ```
 
-That's it! The `SqlAgentEnv.from_docker_image()` method handles:
+That's it! The `DataCleaningEnv.from_docker_image()` method handles:
 - Starting the Docker container
 - Waiting for the server to be ready
 - Connecting to the environment
@@ -57,7 +61,11 @@ Before using the environment, you need to build the Docker image:
 
 ```bash
 # From project root
-docker build -t sql_agent_env-env:latest -f server/Dockerfile .
+docker build -t data-cleaning-env:latest -f server/Dockerfile .
+```
+
+```bash
+docker run --env-file .env -p 8000:8000 data-cleaning-env:latest
 ```
 
 ## Deploying to Hugging Face Spaces
@@ -119,57 +127,56 @@ The deployed space includes:
 ## Environment Details
 
 ### Action
-**SqlAgentAction**: Contains a single field
-- `message` (str) - The message to echo back
+**DataCleaningAction**: Contains fields to execute a command
+- `command` (str) - Data manipulation command: 'drop_duplicates', 'fill_na', 'format_date', 'filter', or 'submit'.
+- `params` (Dict) - Parameters for the command (e.g., {'column': 'email', 'value': 'unknown'}).
 
 ### Observation
-**SqlAgentObservation**: Contains the echo response and metadata
-- `echoed_message` (str) - The message echoed back
-- `message_length` (int) - Length of the message
-- `reward` (float) - Reward based on message length (length × 0.1)
-- `done` (bool) - Always False for echo environment
-- `metadata` (dict) - Additional info like step count
+**DataCleaningObservation**: Contains the dataset state and metadata
+- `dataset_preview` (str) - String preview of the current dataset (first 5 rows).
+- `schema_info` (str) - Information about available columns.
+- `message` (str) - Feedback from the last executed action.
+- `current_score` (float) - Current grader score indicating progress.
+- `done` (bool) - True when 'submit' command is used.
+- `reward` (float) - Reward based on the improvement in grader score.
 
 ### Reward
-The reward is calculated as: `message_length × 0.1`
-- "Hi" → reward: 0.2
-- "Hello, World!" → reward: 1.3
-- Empty message → reward: 0.0
+The reward is calculated as the increase in `current_score` from the previous step. The final reward upon submission is the total score.
 
 ## Advanced Usage
 
 ### Connecting to an Existing Server
 
-If you already have a Sql Agent Env environment server running, you can connect directly:
+If you already have a Data Cleaning Env environment server running, you can connect directly:
 
 ```python
-from sql_agent_env import SqlAgentEnv
+from data_cleaning_env import DataCleaningEnv
 
 # Connect to existing server
-sql_agent_envenv = SqlAgentEnv(base_url="<ENV_HTTP_URL_HERE>")
+data_cleaning_envenv = DataCleaningEnv(base_url="<ENV_HTTP_URL_HERE>")
 
 # Use as normal
-result = sql_agent_envenv.reset()
-result = sql_agent_envenv.step(SqlAgentAction(message="Hello!"))
+result = data_cleaning_envenv.reset()
+result = data_cleaning_envenv.step(DataCleaningAction(command="drop_duplicates", params={}))
 ```
 
-Note: When connecting to an existing server, `sql_agent_envenv.close()` will NOT stop the server.
+Note: When connecting to an existing server, `data_cleaning_envenv.close()` will NOT stop the server.
 
 ### Using the Context Manager
 
 The client supports context manager usage for automatic connection management:
 
 ```python
-from sql_agent_env import SqlAgentAction, SqlAgentEnv
+from data_cleaning_env import DataCleaningAction, DataCleaningEnv
 
 # Connect with context manager (auto-connects and closes)
-with SqlAgentEnv(base_url="http://localhost:8000") as env:
+with DataCleaningEnv(base_url="http://localhost:8000") as env:
     result = env.reset()
-    print(f"Reset: {result.observation.echoed_message}")
+    print(f"Reset: {result.observation.message}")
     # Multiple steps with low latency
-    for msg in ["Hello", "World", "!"]:
-        result = env.step(SqlAgentAction(message=msg))
-        print(f"Echoed: {result.observation.echoed_message}")
+    for cmd in ["drop_duplicates", "submit"]:
+        result = env.step(DataCleaningAction(command=cmd, params={}))
+        print(f"Feedback: {result.observation.message}")
 ```
 
 The client uses WebSocket connections for:
@@ -185,9 +192,9 @@ modify `server/app.py` to use factory mode:
 ```python
 # In server/app.py - use factory mode for concurrent sessions
 app = create_app(
-    SqlAgentEnvironment,  # Pass class, not instance
-    SqlAgentAction,
-    SqlAgentObservation,
+    DataCleaningEnvironment,  # Pass class, not instance
+    DataCleaningAction,
+    DataCleaningObservation,
     max_concurrent_envs=4,  # Allow 4 concurrent sessions
 )
 ```
@@ -195,15 +202,15 @@ app = create_app(
 Then multiple clients can connect simultaneously:
 
 ```python
-from sql_agent_env import SqlAgentAction, SqlAgentEnv
+from data_cleaning_env import DataCleaningAction, DataCleaningEnv
 from concurrent.futures import ThreadPoolExecutor
 
 def run_episode(client_id: int):
-    with SqlAgentEnv(base_url="http://localhost:8000") as env:
+    with DataCleaningEnv(base_url="http://localhost:8000") as env:
         result = env.reset()
         for i in range(10):
-            result = env.step(SqlAgentAction(message=f"Client {client_id}, step {i}"))
-        return client_id, result.observation.message_length
+            result = env.step(DataCleaningAction(command="drop_duplicates", params={}))
+        return client_id, result.observation.current_score
 
 # Run 4 episodes concurrently
 with ThreadPoolExecutor(max_workers=4) as executor:
@@ -218,7 +225,7 @@ Test the environment logic directly without starting the HTTP server:
 
 ```bash
 # From the server directory
-python3 server/sql_agent_env_environment.py
+python3 server/data_cleaning_env_environment.py
 ```
 
 This verifies that:
@@ -238,18 +245,18 @@ uvicorn server.app:app --reload
 ## Project Structure
 
 ```
-sql_agent_env/
+data_cleaning_env/
 ├── .dockerignore         # Docker build exclusions
 ├── __init__.py            # Module exports
 ├── README.md              # This file
 ├── openenv.yaml           # OpenEnv manifest
 ├── pyproject.toml         # Project metadata and dependencies
 ├── uv.lock                # Locked dependencies (generated)
-├── client.py              # SqlAgentEnv client
+├── client.py              # DataCleaningEnv client
 ├── models.py              # Action and Observation models
 └── server/
     ├── __init__.py        # Server module exports
-    ├── sql_agent_env_environment.py  # Core environment logic
+    ├── data_cleaning_env_environment.py  # Core environment logic
     ├── app.py             # FastAPI application (HTTP + WebSocket endpoints)
     └── Dockerfile         # Container image definition
 ```

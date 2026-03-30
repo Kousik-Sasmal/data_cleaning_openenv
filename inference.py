@@ -17,8 +17,8 @@ import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
-from models import SqlAgentAction
-from client import SqlAgentEnv
+from models import DataCleaningAction
+from client import DataCleaningEnv
 
 load_dotenv()
 
@@ -32,9 +32,9 @@ client = AsyncOpenAI(
 )
 
 async def _run_task(task_id: int):
-    action_schema = SqlAgentAction.model_json_schema()
+    action_schema = DataCleaningAction.model_json_schema()
 
-    async with SqlAgentEnv(base_url="http://localhost:8000") as env:
+    async with DataCleaningEnv(base_url="http://localhost:8000") as env:
         obs_res = await env.reset(task_id=task_id)
         obs = obs_res.observation
         
@@ -67,14 +67,14 @@ async def _run_task(task_id: int):
                 print(f"[{task_id}] Action generated: {action_json}")
                 
                 action_dict = json.loads(action_json)
-                action = SqlAgentAction(**action_dict)
+                action = DataCleaningAction(**action_dict)
                 res = await env.step(action)
                 obs = res.observation
                 print(f"[{task_id}] System reply: {obs.message} | Score: {obs.current_score}")
                 
             except Exception as e:
                 print(f"[{task_id}] Execution error: {e}")
-                res = await env.step(SqlAgentAction(command="submit", params={}))
+                res = await env.step(DataCleaningAction(command="submit", params={}))
                 obs = res.observation
                 break
                 

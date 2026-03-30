@@ -4,13 +4,13 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Sql Agent Env Environment."""
+"""Data Cleaning Env Environment."""
 
-from .client import SqlAgentEnv
-from .models import SqlAgentAction, SqlAgentObservation
+from .client import DataCleaningEnv
+from .models import DataCleaningAction, DataCleaningObservation
 
 __all__ = [
-    "SqlAgentAction",
-    "SqlAgentObservation",
-    "SqlAgentEnv",
+    "DataCleaningAction",
+    "DataCleaningObservation",
+    "DataCleaningEnv",
 ]

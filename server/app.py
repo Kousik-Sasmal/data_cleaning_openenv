@@ -5,9 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-FastAPI application for the Sql Agent Env Environment.
+FastAPI application for the Data Cleaning Env Environment.
 
-This module creates an HTTP server that exposes the SqlAgentEnvironment
+This module creates an HTTP server that exposes the DataCleaningEnvironment
 over HTTP and WebSocket endpoints, compatible with EnvClient.
 
 Endpoints:
@@ -36,11 +36,11 @@ except Exception as e:  # pragma: no cover
     ) from e
 
 try:
-    from ..models import SqlAgentAction, SqlAgentObservation
-    from .sql_agent_env_environment import SqlAgentEnvironment
+    from ..models import DataCleaningAction, DataCleaningObservation
+    from .data_cleaning_env_environment import DataCleaningEnvironment
 except:
-    from models import SqlAgentAction, SqlAgentObservation
-    from server.sql_agent_env_environment import SqlAgentEnvironment
+    from models import DataCleaningAction, DataCleaningObservation
+    from server.data_cleaning_env_environment import DataCleaningEnvironment
 
 from fastapi import Request
 import subprocess
@@ -50,16 +50,16 @@ import os
 
 # Create the app with web interface and README integration
 app = create_app(
-    SqlAgentEnvironment,
-    SqlAgentAction,
-    SqlAgentObservation,
-    env_name="sql_agent_env",
+    DataCleaningEnvironment,
+    DataCleaningAction,
+    DataCleaningObservation,
+    env_name="data_cleaning_env",
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )
 
 @app.get("/tasks")
 def get_tasks():
-    from models import SqlAgentAction
+    from models import DataCleaningAction
     try:
         from server.tasks import TASKS
     except ImportError:
@@ -67,7 +67,7 @@ def get_tasks():
     
     return {
         "tasks": [{"id": i, "name": t.name, "description": t.description} for i, t in enumerate(TASKS)],
-        "action_schema": SqlAgentAction.model_json_schema()
+        "action_schema": DataCleaningAction.model_json_schema()
     }
 
 @app.get("/grader")
@@ -98,7 +98,7 @@ def main(host: str = "0.0.0.0", port: int = 8000):
     This function enables running the server without Docker:
         uv run --project . server
         uv run --project . server --port 8001
-        python -m sql_agent_env.server.app
+        python -m data_cleaning_env.server.app
 
     Args:
         host: Host address to bind to (default: "0.0.0.0")
@@ -106,7 +106,7 @@ def main(host: str = "0.0.0.0", port: int = 8000):
 
     For production deployments, consider using uvicorn directly with
     multiple workers:
-        uvicorn sql_agent_env.server.app:app --workers 4
+        uvicorn data_cleaning_env.server.app:app --workers 4
     """
     import uvicorn
 

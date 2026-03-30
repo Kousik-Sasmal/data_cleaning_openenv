@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Sql Agent Env Environment Client."""
+"""Data Cleaning Env Environment Client."""
 
 from typing import Dict
 
@@ -12,14 +12,14 @@ from openenv.core import EnvClient
 from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import State
 
-from models import SqlAgentAction, SqlAgentObservation
+from models import DataCleaningAction, DataCleaningObservation
 
 
-class SqlAgentEnv(
-    EnvClient[SqlAgentAction, SqlAgentObservation, State]
+class DataCleaningEnv(
+    EnvClient[DataCleaningAction, DataCleaningObservation, State]
 ):
     """
-    Client for the Sql Agent Env Environment.
+    Client for the Data Cleaning Env Environment.
 
     This client maintains a persistent WebSocket connection to the environment server,
     enabling efficient multi-step interactions with lower latency.
@@ -27,29 +27,29 @@ class SqlAgentEnv(
 
     Example:
         >>> # Connect to a running server
-        >>> with SqlAgentEnv(base_url="http://localhost:8000") as client:
+        >>> with DataCleaningEnv(base_url="http://localhost:8000") as client:
         ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
+        ...     print(result.observation.message)
         ...
-        ...     result = client.step(SqlAgentAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
+        ...     result = client.step(DataCleaningAction(command="drop_duplicates", params={}))
+        ...     print(result.observation.message)
 
     Example with Docker:
         >>> # Automatically start container and connect
-        >>> client = SqlAgentEnv.from_docker_image("sql_agent_env-env:latest")
+        >>> client = DataCleaningEnv.from_docker_image("data-cleaning-env:latest")
         >>> try:
         ...     result = client.reset()
-        ...     result = client.step(SqlAgentAction(message="Test"))
+        ...     result = client.step(DataCleaningAction(command="drop_duplicates", params={}))
         ... finally:
         ...     client.close()
     """
 
-    def _step_payload(self, action: SqlAgentAction) -> Dict:
+    def _step_payload(self, action: DataCleaningAction) -> Dict:
         """
-        Convert SqlAgentAction to JSON payload for step message.
+        Convert DataCleaningAction to JSON payload for step message.
 
         Args:
-            action: SqlAgentAction instance
+            action: DataCleaningAction instance
 
         Returns:
             Dictionary representation suitable for JSON encoding
@@ -59,18 +59,18 @@ class SqlAgentEnv(
             "params": action.params,
         }
 
-    def _parse_result(self, payload: Dict) -> StepResult[SqlAgentObservation]:
+    def _parse_result(self, payload: Dict) -> StepResult[DataCleaningObservation]:
         """
-        Parse server response into StepResult[SqlAgentObservation].
+        Parse server response into StepResult[DataCleaningObservation].
 
         Args:
             payload: JSON response data from server
 
         Returns:
-            StepResult with SqlAgentObservation
+            StepResult with DataCleaningObservation
         """
         obs_data = payload.get("observation", {})
-        observation = SqlAgentObservation(
+        observation = DataCleaningObservation(
             dataset_preview=obs_data.get("dataset_preview", ""),
             schema_info=obs_data.get("schema_info", ""),
             message=obs_data.get("message", ""),
@@ -106,9 +106,9 @@ class SqlAgentEnv(
 
 async def main():
     # 1. Connect to your running local server (async context manager)
-    print("--- Connecting to SQL Agent Environment (Async) ---")
+    print("--- Connecting to Data Cleaning Environment (Async) ---")
     
-    async with SqlAgentEnv(base_url="http://localhost:8000") as client:
+    async with DataCleaningEnv(base_url="http://localhost:8000") as client:
         
         # 2. Reset the environment
         print("\n[Action] Resetting Environment...")
@@ -120,7 +120,7 @@ async def main():
         # 3. Take a step: Send a message
         print("\n[Action] Sending Data Cleaning Command...")
         # Note: We use await here because client.step is an async call
-        result = await client.step(SqlAgentAction(command="drop_duplicates", params={}))
+        result = await client.step(DataCleaningAction(command="drop_duplicates", params={}))
         
         # 4. Print the results from the observation
         print(f"System Message: {result.observation.message}")

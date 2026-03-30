@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Sql Agent Env Environment Implementation.
+Data Cleaning Env Environment Implementation.
 
 A simple test environment that echoes back messages sent to it.
 Perfect for testing HTTP server infrastructure.
@@ -22,14 +22,14 @@ from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
 try:
-    from ..models import SqlAgentAction, SqlAgentObservation
+    from ..models import DataCleaningAction, DataCleaningObservation
     from .tasks import TASKS
 except ImportError:
-    from models import SqlAgentAction, SqlAgentObservation
+    from models import DataCleaningAction, DataCleaningObservation
     from server.tasks import TASKS
 
 
-class SqlAgentEnvironment(Environment):
+class DataCleaningEnvironment(Environment):
     """
     Data Cleaning Environment where the agent processes messy datasets.
     """
@@ -44,7 +44,7 @@ class SqlAgentEnvironment(Environment):
         self._dataset = []
         self._last_score = 0.0
 
-    def reset(self, seed=None, task_id=None, **kwargs) -> SqlAgentObservation:
+    def reset(self, seed=None, task_id=None, **kwargs) -> DataCleaningObservation:
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._reset_count += 1
         
@@ -59,13 +59,13 @@ class SqlAgentEnvironment(Environment):
         
         return self._build_obs(f"Started Task: {self.current_task.description}", done=False, reward=0.0)
 
-    def _build_obs(self, message: str, done: bool, reward: float) -> SqlAgentObservation:
+    def _build_obs(self, message: str, done: bool, reward: float) -> DataCleaningObservation:
         preview = str(self._dataset[:5]) if self._dataset else "Empty dataset"
         schema = str(list(self._dataset[0].keys())) if self._dataset else "None"
         
         score = self.current_task.grader(self._dataset) if self.current_task else 0.0
         
-        return SqlAgentObservation(
+        return DataCleaningObservation(
             dataset_preview=preview,
             schema_info=schema,
             message=message,
@@ -74,7 +74,7 @@ class SqlAgentEnvironment(Environment):
             reward=reward
         )
 
-    def step(self, action: SqlAgentAction, timeout_s=None, **kwargs) -> SqlAgentObservation:
+    def step(self, action: DataCleaningAction, timeout_s=None, **kwargs) -> DataCleaningObservation:
         self._state.step_count += 1
         cmd = action.command
         params = action.params

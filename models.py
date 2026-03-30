@@ -5,9 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Data models for the Sql Agent Env Environment.
+Data models for the Data Cleaning Env Environment.
 
-The sql_agent_env environment is a simple test environment that echoes back messages.
+The data_cleaning_env environment is a simple test environment that echoes back messages.
 """
 
 from openenv.core.env_server.types import Action, Observation
@@ -19,7 +19,7 @@ from openenv.core.env_server.types import Action, Observation
 from pydantic import Field
 
 
-class SqlAgentAction(Action):
+class DataCleaningAction(Action):
     """Action for the Data Cleaning environment."""
 
     command: str = Field(
@@ -32,7 +32,7 @@ class SqlAgentAction(Action):
     )
 
 
-class SqlAgentObservation(Observation):
+class DataCleaningObservation(Observation):
     """Observation from the Data Cleaning environment."""
 
     dataset_preview: str = Field(default="", description="String preview of the current dataset (first 5 rows).")

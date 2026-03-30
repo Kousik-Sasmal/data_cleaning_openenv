@@ -1,5 +1,5 @@
 spec_version: 1
-name: sql_agent_env
+name: data_cleaning_env
 type: space
 runtime: fastapi
 app: server.app:app

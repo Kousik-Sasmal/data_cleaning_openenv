@@ -4,8 +4,8 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Sql Agent Env environment server components."""
+"""Data Cleaning Env environment server components."""
 
-from .sql_agent_env_environment import SqlAgentEnvironment
+from .data_cleaning_env_environment import DataCleaningEnvironment
 
-__all__ = ["SqlAgentEnvironment"]
+__all__ = ["DataCleaningEnvironment"]

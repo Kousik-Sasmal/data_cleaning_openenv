@@ -1,0 +1,2 @@
+[console_scripts]
+server = sql_agent_env.server.app:main

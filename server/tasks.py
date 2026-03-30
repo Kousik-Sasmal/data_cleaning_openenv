@@ -17,9 +17,11 @@ class DataCleaningTask:
         
         # Calculate how many rows match exactly
         match_count = 0
+        target_copy = list(self.target_data)
         for current_row in current_data:
-            if current_row in self.target_data:
+            if current_row in target_copy:
                 match_count += 1
+                target_copy.remove(current_row)
                 
         # Calculate precision and recall
         precision = match_count / len(current_data) if len(current_data) > 0 else 0.0

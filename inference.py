@@ -35,6 +35,7 @@ async def _run_task(task_id: int):
     action_schema = DataCleaningAction.model_json_schema()
 
     async with DataCleaningEnv(base_url="http://localhost:8000") as env:
+    # async with DataCleaningEnv(base_url="https://kousiksasmal-data-cleaning-env.hf.space") as env:
         obs_res = await env.reset(task_id=task_id)
         obs = obs_res.observation
         

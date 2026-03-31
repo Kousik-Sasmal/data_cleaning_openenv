@@ -27,10 +27,11 @@ class DataCleaningTask:
         precision = match_count / len(current_data) if len(current_data) > 0 else 0.0
         recall = match_count / len(self.target_data) if len(self.target_data) > 0 else 0.0
         
-        # F1 score approximation
+        # F1 score approximation capped to 1.0
         if precision + recall == 0:
             return 0.0
-        return 2 * (precision * recall) / (precision + recall)
+        score = 2 * (precision * recall) / (precision + recall)
+        return max(0.0, min(1.0, float(score)))
 
 
 # Task 1: Easy - Drop exact duplicates

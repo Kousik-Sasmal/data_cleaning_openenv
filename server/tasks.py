@@ -29,9 +29,9 @@ class DataCleaningTask:
         
         # F1 score approximation capped to 1.0
         if precision + recall == 0:
-            return 0.0
+            return 0.01
         score = 2 * (precision * recall) / (precision + recall)
-        return max(0.0, min(1.0, float(score)))
+        return max(0.01, min(0.99, float(score)))
 
 
 # Task 1: Easy - Drop exact duplicates

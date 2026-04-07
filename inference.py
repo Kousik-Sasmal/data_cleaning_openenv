@@ -12,8 +12,11 @@ MANDATORY
 """
 
 import os
+import sys
 import json
 import asyncio
+import re
+from typing import Optional, List
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
@@ -24,88 +27,128 @@ load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
+MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-oss-20b")
+TASK_NAME = os.getenv("DATA_CLEANING_ENV_TASK", "data_cleaning_task_0")
+BENCHMARK = os.getenv("DATA_CLEANING_ENV_BENCHMARK", "data_cleaning_env")
+MAX_STEPS = 10
 
-client = AsyncOpenAI(
-    base_url=API_BASE_URL,
-    api_key=API_KEY
-)
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-async def _run_task(task_id: int):
-    action_schema = DataCleaningAction.model_json_schema()
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
 
-    async with DataCleaningEnv(base_url="http://localhost:8000") as env:
-    # async with DataCleaningEnv(base_url="https://kousiksasmal-data-cleaning-env.hf.space") as env:
-        obs_res = await env.reset(task_id=task_id)
-        obs = obs_res.observation
-        
-        while not obs.done:
-            sys_prompt = f"""You are an expert Data Cleaning Agent. 
-            Your goal is to manipulate the dataset using precise commands to achieve the exact target format.
-            Available commands: drop_duplicates, fill_na, format_date, filter, submit.
-            You must output a single JSON object matching this JSON Schema: {json.dumps(action_schema)}
-            """
-            
-            user_prompt = f"""
-            Dataset Preview: {obs.dataset_preview}
-            Available Columns: {obs.schema_info}
-            Last System Message: {obs.message}
-            
-            What is your next action? Return ONLY the raw JSON object. Use double quotes.
-            """
-            
-            try:
-                completion = await client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                
-                action_json = completion.choices[0].message.content
-                print(f"[{task_id}] Action generated: {action_json}")
-                
-                action_dict = json.loads(action_json)
-                action = DataCleaningAction(**action_dict)
-                res = await env.step(action)
-                obs = res.observation
-                print(f"[{task_id}] System reply: {obs.message} | Score: {obs.current_score}")
-                
-            except Exception as e:
-                print(f"[{task_id}] Execution error: {e}")
-                res = await env.step(DataCleaningAction(command="submit", params={}))
-                obs = res.observation
-                break
-                
-        return obs.current_score
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 async def main():
     if not API_KEY:
-        print("WARNING: HF_TOKEN or API_KEY is not set in environment. Inference WILL fail.")
+        print("WARNING: HF_TOKEN or API_KEY is not set in environment. Inference WILL fail.", file=sys.stderr)
         
-    scores = []
-    print(f"Starting Inference using {MODEL_NAME} at {API_BASE_URL}...")
+    client = AsyncOpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY
+    )
     
+    # parse task_id from TASK_NAME if present (e.g. "data_cleaning_0" -> 0)
     try:
-        from server.tasks import TASKS
-        num_tasks = len(TASKS)
-    except Exception:
-        num_tasks = 3
+        task_id = int(TASK_NAME.split("_")[-1])
+    except (ValueError, IndexError):
+        task_id = 0
         
-    for i in range(num_tasks):
-        print(f"\n--- Running Task {i} ---")
-        try:
-            score = await _run_task(i)
-            print(f"Task {i} Final Grader Score: {score}")
-            scores.append(score)
-        except Exception as e:
-            print(f"Task {i} Inference Failed: {e}")
-            scores.append(0.0)
+    action_schema = DataCleaningAction.model_json_schema()
+
+    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    
+    steps_taken = 0
+    rewards = []
+    score = 0.0
+    success = False
+    last_score = 0.0
+
+    try:
+        async with DataCleaningEnv(base_url="http://localhost:8000") as env:
+            obs_res = await env.reset(task_id=task_id)
+            obs = obs_res.observation
             
-    print(f"\nFinal Scores: {json.dumps(scores)}")
-    return scores
+            # max steps safety bound just in case 
+            for _ in range(MAX_STEPS):
+                if obs.done:
+                    break
+                    
+                steps_taken += 1
+                sys_prompt = f"""You are an expert Data Cleaning Agent. 
+                Your goal is to manipulate the dataset using precise commands to achieve the exact target format.
+                Available commands: drop_duplicates, fill_na, format_date, filter, submit.
+                You must output a single JSON object matching this JSON Schema: {json.dumps(action_schema)}
+                """
+                
+                user_prompt = f"""
+                Dataset Preview: {obs.dataset_preview}
+                Available Columns: {obs.schema_info}
+                Last System Message: {obs.message}
+                
+                What is your next action? Return ONLY the raw JSON object. Use double quotes.
+                """
+                
+                action_str_log = "null"
+                error_msg = None
+                reward = 0.0
+                done = False
+                
+                try:
+                    completion = await client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=[
+                            {"role": "system", "content": sys_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    action_json = completion.choices[0].message.content
+                    action_str_log = re.sub(r'\s+', ' ', action_json).strip()
+                    
+                    action_dict = json.loads(action_json)
+                    action = DataCleaningAction(**action_dict)
+                    res = await env.step(action)
+                    obs = res.observation
+                    
+                    reward = obs.current_score - last_score
+                    last_score = obs.current_score
+                    score = obs.current_score
+                    done = obs.done
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    action_str_log = "error"
+                    try:
+                        res = await env.step(DataCleaningAction(command="submit", params={}))
+                        obs = res.observation
+                        reward = obs.current_score - last_score
+                        last_score = obs.current_score
+                        score = obs.current_score
+                        done = obs.done
+                    except Exception:
+                        done = True
+                
+                rewards.append(reward)
+                log_step(step=steps_taken, action=action_str_log, reward=reward, done=done, error=error_msg)
+                
+    except Exception as e:
+        print(f"[{task_id}] Environment error: {e}", file=sys.stderr)
+        
+    score = max(0.0, min(float(score), 1.0))
+    success = score > 0.0 
+    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+            
+    return score
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -30,7 +30,7 @@ API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-oss-20b")
 TASK_NAME = os.getenv("DATA_CLEANING_ENV_TASK", "data_cleaning_task_0")
 BENCHMARK = os.getenv("DATA_CLEANING_ENV_BENCHMARK", "data_cleaning_env")
-MAX_STEPS = 10
+MAX_STEPS = 15
 
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
@@ -44,10 +44,18 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    # According to OpenEnv validator checks, standard might enforce .3f or .2f
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 async def main():
+    # Initialize variables at the top so log_end can see them even if reset() fails
+    steps_taken = 0
+    rewards = []
+    score = 0.0
+    success = False
+    last_score = 0.0
+    
     if not API_KEY:
         print("WARNING: HF_TOKEN or API_KEY is not set in environment. Inference WILL fail.", file=sys.stderr)
         
@@ -66,18 +74,12 @@ async def main():
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
     
-    steps_taken = 0
-    rewards = []
-    score = 0.0
-    success = False
-    last_score = 0.0
-
     try:
         async with DataCleaningEnv(base_url="http://localhost:8000") as env:
+        # async with DataCleaningEnv(base_url="https://kousiksasmal-data-cleaning-env.hf.space") as env:
             obs_res = await env.reset(task_id=task_id)
             obs = obs_res.observation
             
-            # max steps safety bound just in case 
             for _ in range(MAX_STEPS):
                 if obs.done:
                     break
@@ -99,8 +101,8 @@ async def main():
                 
                 action_str_log = "null"
                 error_msg = None
-                reward = 0.0
-                done = False
+                step_reward = 0.0
+                obs_done = False
                 
                 try:
                     completion = await client.chat.completions.create(
@@ -113,42 +115,46 @@ async def main():
                     )
                     
                     action_json = completion.choices[0].message.content
+                    # Clean newlines to keep the [STEP] line clean
                     action_str_log = re.sub(r'\s+', ' ', action_json).strip()
                     
                     action_dict = json.loads(action_json)
                     action = DataCleaningAction(**action_dict)
                     res = await env.step(action)
                     obs = res.observation
+                    obs_done = obs.done
                     
-                    reward = obs.current_score - last_score
+                    # Partial progress calculation
+                    step_reward = max(0.0, float(obs.current_score - last_score))
                     last_score = obs.current_score
                     score = obs.current_score
-                    done = obs.done
                     
                 except Exception as e:
                     error_msg = str(e)
-                    action_str_log = "error"
+                    action_str_log = f"error: {error_msg[:30]}" 
                     try:
                         res = await env.step(DataCleaningAction(command="submit", params={}))
                         obs = res.observation
-                        reward = obs.current_score - last_score
-                        last_score = obs.current_score
+                        obs_done = obs.done
+                        step_reward = max(0.0, float(obs.current_score - last_score))
                         score = obs.current_score
-                        done = obs.done
                     except Exception:
-                        done = True
+                        obs_done = True
                 
-                rewards.append(reward)
-                log_step(step=steps_taken, action=action_str_log, reward=reward, done=done, error=error_msg)
+                rewards.append(step_reward)
+                log_step(step=steps_taken, action=action_str_log, reward=step_reward, done=obs_done, error=error_msg)
                 
+                if obs_done:
+                    break
+                    
     except Exception as e:
-        print(f"[{task_id}] Environment error: {e}", file=sys.stderr)
-        
-    score = max(0.0, min(float(score), 1.0))
-    success = score > 0.0 
-    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
-            
-    return score
+        print(f"Environment error: {e}", file=sys.stderr)
+    
+    finally:
+        # Clamping and final output (Emitted no matter what happens above)
+        score = max(0.0, min(float(score), 1.0))
+        success = score > 0.0 
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 if __name__ == "__main__":
     asyncio.run(main())
